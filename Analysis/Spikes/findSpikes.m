@@ -1,0 +1,55 @@
+function [Spikes] = findSpikes(Spikes,thres,Fs)
+%  An amplitude threshold window
+% was set 3.5 standard deviations above and below the mean of
+% the sample distribution. For each peak exceeding the threshold
+% window, a 2.4 ms candidate waveform snippet centered on the
+% absolute minimum of the waveform was removed from the
+% recorded segment and stored
+% Ref - K A Ludwig et al, 2006, Journal of Neural Engineering
+
+timeWindowSpike = 1.2; % in ms before and after the peak
+windowSpike = timeWindowSpike*Fs*1e-3;
+
+Spikes.threshold = zeros(size(Spikes.whitenedSpikeTrace,1),1);
+Spikes.threshold = (thres*std(abs(Spikes.whitenedSpikeTrace(:,1e6:end)),0,2));
+
+%% Finding points where traces crosses the threshold 
+
+for i=1:size(Spikes.whitenedSpikeTrace,1)
+    % Getting time when the spike exceeds the threshold for the channel
+%     a = findpeaks(abs(Spikes.whitenedSpikeTrace(i,:)-mean(Spikes.whitenedSpikeTrace(i,:),2)),Spikes.threshold(i));    
+%     Spikes.Spikes(i).spikeTime = a.loc';
+    Spikes.Spikes(i).spikeTime = find(diff(Spikes.threshold(i) >= squeeze(Spikes.whitenedSpikeTrace(i,:)))==-1);
+    for j=1:size(Spikes.Spikes(i).spikeTime,2)
+        st = Spikes.Spikes(i).spikeTime(j) - windowSpike;
+        sp = Spikes.Spikes(i).spikeTime(j) + windowSpike;
+        if st <=0
+            Spikes.Spikes(i).spikeTime(j) = NaN;
+            Spikes.Spikes(i).spikeWaveform(j,:) = NaN(windowSpike*2 + 1,1);
+            continue;
+        end
+        if sp > size(Spikes.whitenedSpikeTrace,2)
+            Spikes.Spikes(i).spikeTime(j) = NaN;
+            Spikes.Spikes(i).spikeWaveform(j,:) = NaN(windowSpike*2 + 1,1);
+            continue;
+        end
+        Spikes.Spikes(i).spikeWaveform(j,:) = Spikes.whitenedSpikeTrace(i,st:sp);
+    end
+    nanLoc = find(isnan(Spikes.Spikes(i).spikeTime));
+    Spikes.Spikes(i).spikeTime(nanLoc) = [];
+    Spikes.Spikes(i).spikeWaveform(nanLoc,:) = [];
+end
+
+%% Ploting
+% figure;
+% for i=1:6
+%     for j=1:3
+%         subplot(6,3,(i-1)*3+j);
+%         plot(Spikes.Spikes((i-1)*3+j).spikeWaveform(1:100,:)');
+%     end
+% end
+% %% ploting
+% figure();
+% plot(Spikes.Spikes(11).spikeWaveform');
+
+%Spikes.Spikes(i).spikeTime = find(diff(Spikes.threshold(i) >= squeeze(abs(Spikes.whitenedSpikeTrace(i,:))))==-1);
