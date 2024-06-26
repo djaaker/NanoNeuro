@@ -90,8 +90,6 @@ for jj = 1:length(evaluation_points)
     end
 end
 
-v = VideoWriter('wave_1.avi');
-
 % plotting 1 - evaluation points
 %if options.plot, plot_evaluation_points( p, evaluation_points ); end
 
