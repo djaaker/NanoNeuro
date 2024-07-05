@@ -2,7 +2,7 @@
 
 
 % options
-options.plot = false; % this option turns plots ON or OFF
+options.plot = true; % this option turns plots ON or OFF
 options.plot_shuffled_examples = false; % example plots w/channels shuffled in space
 options.subject = 'W';
 trial = 1;
@@ -76,15 +76,15 @@ for ii = 1:length(xf(1,1,:))
     dy(:,:,ii) = inpaint_nans(dy(:,:,ii));
     
     %cav(:,:,ii) = curl(X,Y,dx(:,:,evaluation_points(ii)), dy(:,:,evaluation_points(ii)));
-    cav(:,:,ii) = curl(X,Y,dx(:,:,ii), dy(:,:,ii));
-    cav(:,:,ii) = inpaint_nans(cav(:,:,ii));
+    [curlz(:,:,ii), cav(:,:,ii)] = curl(X,Y,dx(:,:,ii), dy(:,:,ii));
+    % cav(:,:,ii) = inpaint_nans(cav(:,:,ii)); curlz(:,:,ii) = inpaint_nans(curlz(:,:,ii));
 end
 
 
 % source point
 source_rot = nan( 2, length(evaluation_points) );
 for ii = 1:length(evaluation_points)    
-    [yy,xx] = find( cav(:,:,ii) == max( reshape(cav(:,:,ii), 1, [] ) ) );
+    [yy,xx] = find( curlz(:,:,ii) == max( reshape(curlz(:,:,ii), 1, [] ) ) );
     if numel(yy) == 1
         source_rot(1,ii) = xx; source_rot(2,ii) = yy;
     else
@@ -98,7 +98,7 @@ rho_rot = zeros( 1, length(evaluation_points) ); wave_cnt = 1;
 for jj = 1:length(evaluation_points)
     
     pl = angle( p(:,:,evaluation_points(jj)) ); waveTime = [];
-    rho_rot(jj) = abs(phase_correlation_rotation( pl, cav(:,:,jj), source_rot(:,jj)));
+    rho_rot(jj) = abs(phase_correlation_rotation( pl, curlz(:,:,jj), source_rot(:,jj)));
 
     % if there is a rotating wave, capture just the wave
     if rho_rot(jj) > plot_rho_value
@@ -117,7 +117,7 @@ for jj = 1:length(evaluation_points)
                 continue; 
             else
 
-                fprintf("\nmidpoint: %d\nkk: %d\n", mid_point, kk) 
+                % fprintf("\nmidpoint: %d\nkk: %d\n", mid_point, kk) 
 
                 wp_st = mid_point - 20; wp_sp = mid_point + 20;
     
@@ -134,11 +134,11 @@ for jj = 1:length(evaluation_points)
                 if t > 3001
                     continue;
                 end
-                
+
                 wave_possible_rho = nan(size(wave_possible)); 
                 for qq = 1:length(wave_possible)
                     pl_poss(:, :, qq) = angle(p(:, :, qq));
-                    wave_possible_rho(qq) = abs(phase_correlation_rotation(pl_poss(:, :, qq), cav(:, :, t), source_current));
+                    wave_possible_rho(qq) = abs(phase_correlation_rotation(pl_poss(:, :, qq), curlz(:, :, t), source_current));
                 end
                 
                 % wave_possible_rho = wave_possible_rho(rho_real);
@@ -147,15 +147,35 @@ for jj = 1:length(evaluation_points)
         end
         
         % find the time that the wave is present
-        waveTime = extract_wave(wave_possible, wave_possible_rho);
-        fprintf("\nwave number:%d\nwave midpoint: %d\nwaveTime start: %d\n",wave_cnt, mid_point, waveTime(1))
-    
-        % populate the rotWaves struct
+        [waveTime, waveRho] = extract_wave(wave_possible, wave_possible_rho, plot_rho_value);
+        % fprintf("\nwave number:%d\nwave midpoint: %d\nwaveTime start: %d\n",wave_cnt, mid_point, waveTime(1))
+
+        omega = nan(8,8,length(waveTime)); waveCurl = omega;
+        for i = 1:length(waveTime)
+            time = waveTime(i);
+            omega(:,:,i) = cav(:,:,time); waveCurl(:,:,i) = curlz(:,:,time);
+        end
+
+         % populate the rotWaves struct
         rotWaves(wave_cnt).waveTime = waveTime; 
         rotWaves(wave_cnt).source = source_current;
         rotWaves(wave_cnt).wavePossible = wave_possible;
-        rotWaves(wave_cnt).rho = wave_possible_rho;
-        % rotWaves.angVel = cav(:, :, wave_possible);
+        rotWaves(wave_cnt).rho = waveRho;
+        rotWaves(wave_cnt).angVel = omega;
+        rotWaves(wave_cnt).curl = waveCurl;
+
+        cue = "No Rotating Wave";
+        if numel(waveTime) > 1
+            rotWaves(wave_cnt).start = waveTime(1);
+            rotWaves(wave_cnt).end = waveTime(end);
+            rotWaves(wave_cnt).duration = length(waveTime);
+            if waveTime(1) < 1500
+                cue = "Before Cue";
+            else
+                cue = "After Cue";
+            end
+            rotWaves(wave_cnt).cue = cue;
+        end
     
         wave_cnt = wave_cnt + 1;
     end
@@ -189,7 +209,7 @@ if options.plot == true
             wave_plot = xf(:,:,st:sp);
             
             %create plot
-            figure; title( sprintf( 'trial %d, wave example %d, 0 of %d ms', trial, ctr, size(wave_plot,3) ) );
+            figure; title( sprintf( 'trial %d, wave example %d, 0 of %d ms', trial, ctr, length(time) ) );
             color_range = [ min(reshape(wave_plot,[],1)) max(reshape(wave_plot,[],1)) ]; 
             h = imagesc( wave_plot(:,:,1) ); hold on; axis image; 
             plot( source(1,jj), source(2,jj), '.', 'markersize', 35, 'color', [.7 .7 .7] );
@@ -215,60 +235,12 @@ if options.plot == true
             end
     
             ctr = ctr + 1;
-            %close(gcf);
+            % close(gcf);
 
         end
     end
 end
 
-    
-        % % animated wave plot
-        % %if ( rho_rot(jj) > plot_rho_value )
-        % 
-        %     % get start and stop time, truncating if necessary
-        %     st = eval_pts_rot(jj) - plot_time; sp = eval_pts_rot(jj) + plot_time;
-        %     if ( st < 1 ), st = 1; end; if ( sp > size(xf,3) ), sp = size(xf,3); end
-        % 
-        %     % get data to plot, shuffle if option is chosen
-        %     x_plot = xf(:,:,st:sp); 
-        %     if ( options.plot_shuffled_examples == true ), x_plot = shuffle_channels( x_plot ); end        
-        % 
-        %     % create plot
-        %     figure; title( sprintf( 'trial %d, wave example %d, 0 of %d ms', trial, ctr, size(x_plot,3) ) );
-        %     color_range = [ min(reshape(x_plot,[],1)) max(reshape(x_plot,[],1)) ]; 
-        %     h = imagesc( x_plot(:,:,1) ); hold on; axis image; 
-        %     plot( source(1,jj), source(2,jj), '.', 'markersize', 35, 'color', [.7 .7 .7] );
-        %     set( gca, 'linewidth', 3, 'xtick', [], 'ytick', [], 'fontname', 'arial', 'fontsize', 16, 'ydir', 'reverse' ); 
-        %     colormap( M.myMap ); box on; xlabel( 'electrodes' ); ylabel( 'electrodes' ); clim( color_range )
-        % 
-        %     % create colorbar
-        %     cb = colorbar();
-        % 
-        %     set( cb, 'location', 'southoutside' )
-        %     set( cb, 'position', [0.6661    0.1674    0.2429    0.0588] );
-        % 
-        %     set( get(cb,'ylabel'), 'string', 'Amplitude (\muV)' ); set( cb, 'linewidth', 2 )
-        % 
-        %     % animate plot
-        %     for kk = 1:size(x_plot,3)
-        %         set( h, 'cdata', x_plot(:,:,kk) ); 
-        %         set( get(gca,'title'), 'string', ...
-        %             sprintf( 'trial %d, wave example %d, %d of %d ms', trial, ctr, kk, size(x_plot,3) ) )
-        %         pause(pause_length); 
-        %         % frame = getframe(gcf);
-        %         % writeVideo(v,frame)
-        %     end
-        % 
-        %     ctr = ctr + 1;
-        %     %close(gcf);
-    
-       % else 
-            %fprintf("\neval point %d rejected \nrho value = %0.3f < %0.3f\n", eval_pts_rot(jj), rho_rot(jj), plot_rho_value);
-    
-        %end
-%     end
-% end 
-% Close the video file
-%close(v);
+% close(v);
 
 %end
