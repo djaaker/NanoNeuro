@@ -1,18 +1,8 @@
 %function wave_visualizer(behaviour,trial)
 
-
-% options
-options.plot = true; % this option turns plots ON or OFF
-options.plot_shuffled_examples = false; % example plots w/channels shuffled in space
-options.subject = 'W';
-trial = 1;
-
-% init
-M = load( 'generalized-phase-main\input\myMap.mat' );
-
 % parameters
 parameters.Fs = 1000; % data sampling rate [Hz]
-parameters.filter_order = 4; parameters.f = [40 80]; % filter parameters
+parameters.filter_order = 4; parameters.f = [5 20]; % filter parameters
 parameters.start_time = -300; % time point to start analysis
 parameters.stop_time = 0; % stop analysis (relative to target onset)
 parameters.pixel_spacing = 0.4; % spacing between electrodes [mm]
@@ -20,227 +10,207 @@ parameters.lp = 0; % cutoff for negative frequency detection [Hz]
 parameters.evaluation_angle = pi; parameters.tol = 0.2; % evaluation points
 parameters.windowBeforeCue = 1.5; % in seconds 
 parameters.windowAfterCue = 1.5; % in seconds 
-plot_rho_value = 0.5; plot_time = 20; pause_length = 0.2; 
-
-%identities
-xf = behaviour.cueHitTrace(trial).xf;
-%start_ids = find(waves.wavesHit(trial).waveStart==1); 
-%duration = waves.wavesHit(trial).waveDuration(wave_id);
-%wave_points =  start_time : start_time + duration;
+plot_rho_value = 0.7; plot_time = 20; pause_length = 0.2; 
+parameters.extract = true;
 
 
-[rows,cols,~] = size( xf ); 
-[X,Y] = meshgrid( 1:cols, 1:rows ); % create grid
+ 
+if parameters.extract == true 
+    rotWaves = struct();
+    cnt = 1;
+    wavesHit = repmat(struct('waveTime', [], 'wavePresent', [], 'source', [], ...
+                    'rho', [], 'angVel', [], 'curl', [], 'ang', [], ...
+                    'start', [], 'end', [], 'duration', [], 'quadrant', [], 'cue', []),1,143);
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%
-raw = behaviour.cueHitTrace(trial).rawLFP;
-
-% wideband filter
-xf = bandpass_filter( raw, parameters.f(1), parameters.f(2), ...
-    parameters.filter_order, parameters.Fs );
-
-% GP representation
-xgp = generalized_phase( xf, parameters.Fs, parameters.lp );
-% p = xgp(:,:,start_time:stop_time); 
-p = xgp;
-%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%p = behaviour.cueHitTrace(trial).xgp;
-
-evaluation_points = find_evaluation_points( p, parameters.evaluation_angle, parameters.tol );
-
-% calculate phase gradient
-[pm,pd,dx,dy] = phase_gradient_complex_multiplication( p, parameters.pixel_spacing );
-
-%% For Expanding Waves
-% divergence calculation
-source = find_source_points( evaluation_points, X, Y, dx, dy );
-
-% phase correlation with distance (\rho_{\phi,d} measure)
-rho_exp = zeros( 1, length(evaluation_points) );
-for jj = 1:length(evaluation_points)
+for trial = 1:numel(behaviour.cueHitTrace)
+% for trial = 1:3
+% trial = 1;
     
-    ph = angle( p(:,:,evaluation_points(jj)) );
-    rho_exp(jj) = phase_correlation_distance( ph, source(:,jj), parameters.pixel_spacing );
     
-end
-
-
-%% For Rotating Waves
-rotWaves = {}; cav = nan(size(p));
-
-% curl calculation
-for ii = 1:length(xf(1,1,:))
-    dx(:,:,ii) = inpaint_nans(dx(:,:,ii));
-    dy(:,:,ii) = inpaint_nans(dy(:,:,ii));
     
-    %cav(:,:,ii) = curl(X,Y,dx(:,:,evaluation_points(ii)), dy(:,:,evaluation_points(ii)));
-    [curlz(:,:,ii), cav(:,:,ii)] = curl(X,Y,dx(:,:,ii), dy(:,:,ii));
-    % cav(:,:,ii) = inpaint_nans(cav(:,:,ii)); curlz(:,:,ii) = inpaint_nans(curlz(:,:,ii));
-end
-
-
-% source point
-source_rot = nan( 2, length(evaluation_points) );
-for ii = 1:length(evaluation_points)    
-    [yy,xx] = find( curlz(:,:,ii) == max( reshape(curlz(:,:,ii), 1, [] ) ) );
-    if numel(yy) == 1
-        source_rot(1,ii) = xx; source_rot(2,ii) = yy;
-    else
-        source_rot(1,ii) = NaN; source_rot(2,ii) = NaN; 
-    end
-end
-
-
-% phase correlation across polar planes
-rho_rot = zeros( 1, length(evaluation_points) ); wave_cnt = 1;
-for jj = 1:length(evaluation_points)
+    %identities
+    xf = behaviour.cueHitTrace(trial).xf;
+    % trialWaves = struct();
     
-    pl = angle( p(:,:,evaluation_points(jj)) ); waveTime = [];
-    rho_rot(jj) = abs(phase_correlation_rotation( pl, curlz(:,:,jj), source_rot(:,jj)));
+    % Initialize trialWaves structure with empty arrays or appropriate initial values
+    
+    [rows,cols,~] = size( xf ); 
+    [X,Y] = meshgrid( 1:cols, 1:rows ); % create grid
+    
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%
+    raw = behaviour.cueHitTrace(trial).rawLFP;
+    
+    % wideband filter
+    xf = bandpass_filter( raw, parameters.f(1), parameters.f(2), ...
+        parameters.filter_order, parameters.Fs );
+    
+    % GP representation
+    xgp = generalized_phase( xf, parameters.Fs, parameters.lp );
+    % p = xgp(:,:,start_time:stop_time); 
+    p = xgp;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    %p = behaviour.cueHitTrace(trial).xgp;
+    
+    evaluation_points = find_evaluation_points( p, parameters.evaluation_angle, parameters.tol );
+    
+    % calculate phase gradient
+    [pm,pd,dx,dy] = phase_gradient_complex_multiplication( p, parameters.pixel_spacing );
+    
+    %% For Expanding Waves
+    % divergence calculation
+    source = find_source_points( evaluation_points, X, Y, dx, dy );
+    
+    % % phase correlation with distance (\rho_{\phi,d} measure)
+    % rho_exp = zeros( 1, length(evaluation_points));
+    % for jj = 1:length(evaluation_points)
+    %     ph = angle( p(:,:,evaluation_points(jj)) );
+    %     rho_exp(jj) = phase_correlation_distance( ph, source(:,jj), parameters.pixel_spacing );
+    % end
 
-    % if there is a rotating wave, capture just the wave
-    if rho_rot(jj) > plot_rho_value
-        % preallocate structures and define source point
-         
-        source_current = source_rot(:, jj);
+    %% For Rotating Waves
+    % compute the source point of any detected rotating waves
+    [source_rot, cav, curlz] = computeRotationalSouces(p,dx,dy,evaluation_points,X,Y);
+    
+    % phase correlation across polar planes
+    rho_rot = NaN( 1, length(evaluation_points) ); wave_cnt = 1;
+
+    % initialize 2D arrays
+    sourceCurrent = NaN(length(evaluation_points),2); 
+
+    % initialize variable arrays
+    wavePossibleRho = NaN(41,length(evaluation_points)); wavePossible = wavePossibleRho;    
+
+    for jj = 1:length(evaluation_points)
         
-        % cycle through each time point before/after the eval point to
-        % determine if it's a wave
-        for kk = -20:20
-            mid_point = evaluation_points(jj);
-            % fprintf("\neval_points(jj) = %d\nkk + 21 = %d\nstart + kk = %d\n",evaluation_points(jj),kk+21,start+kk)
-            
-            % start point for wave detected in first 20ms is set to the start of trial
-            if evaluation_points(jj) + kk < 1
-                continue; 
-            else
+        pl = angle( p(:,:,evaluation_points(jj)) );
+        rho_rot(jj) = abs(phase_correlation_rotation( pl, curlz(:,:,jj), source_rot(:,jj)));
 
-                % fprintf("\nmidpoint: %d\nkk: %d\n", mid_point, kk) 
-
-                wp_st = mid_point - 20; wp_sp = mid_point + 20;
+    end
     
-                if wp_st < 1
-                    wp_st = 1;
-                end
-                if wp_sp > 3001
-                    wp_sp = 3001;
-                end
-                
-                wave_possible = wp_st : wp_sp; t = mid_point + kk + 21;
-                pl_poss = nan(8, 8, numel(wave_possible)); 
-                
-                if t > 3001
-                    continue;
-                end
-
-                wave_possible_rho = nan(size(wave_possible)); 
-                for qq = 1:length(wave_possible)
-                    pl_poss(:, :, qq) = angle(p(:, :, qq));
-                    wave_possible_rho(qq) = abs(phase_correlation_rotation(pl_poss(:, :, qq), curlz(:, :, t), source_current));
-                end
-                
-                % wave_possible_rho = wave_possible_rho(rho_real);
-            
-            end
+    for jj = 1:length(rho_rot)
+        % if there is a rotating wave, capture just the wave
+        if rho_rot(jj) > plot_rho_value  
+            % find possible waves using the 40ms around the source and evaluation points
+            [wavePossibleRho(:,jj), wavePossible(:,jj), sourceCurrent(jj,1), sourceCurrent(jj,2)] = findPossibleWaves(source_rot, evaluation_points, p, curlz, jj);
         end
-        
-        % find the time that the wave is present
-        [waveTime, waveRho] = extract_wave(wave_possible, wave_possible_rho, plot_rho_value);
-        % fprintf("\nwave number:%d\nwave midpoint: %d\nwaveTime start: %d\n",wave_cnt, mid_point, waveTime(1))
-
-        omega = nan(8,8,length(waveTime)); waveCurl = omega;
-        for i = 1:length(waveTime)
-            time = waveTime(i);
-            omega(:,:,i) = cav(:,:,time); waveCurl(:,:,i) = curlz(:,:,time);
-        end
-
-         % populate the rotWaves struct
-        rotWaves(wave_cnt).waveTime = waveTime; 
-        rotWaves(wave_cnt).source = source_current;
-        rotWaves(wave_cnt).wavePossible = wave_possible;
-        rotWaves(wave_cnt).rho = waveRho;
-        rotWaves(wave_cnt).angVel = omega;
-        rotWaves(wave_cnt).curl = waveCurl;
-
-        cue = "No Rotating Wave";
-        if numel(waveTime) > 1
-            rotWaves(wave_cnt).start = waveTime(1);
-            rotWaves(wave_cnt).end = waveTime(end);
-            rotWaves(wave_cnt).duration = length(waveTime);
-            if waveTime(1) < 1500
-                cue = "Before Cue";
-            else
-                cue = "After Cue";
-            end
-            rotWaves(wave_cnt).cue = cue;
-        end
-    
-        wave_cnt = wave_cnt + 1;
     end
 
-end
+    sourceCurrent(any(isnan(sourceCurrent), 2), :) = [];
+    wavePossible(:, all(isnan(wavePossible))) = []; 
+    wavePossibleRho(:, all(isnan(wavePossibleRho))) = [];
 
 
-eval_pts_rot = []; eval_pts_exp = [];
-for ii = 1:length(evaluation_points)
-    if rho_rot(ii) > rho_exp(ii)
-        eval_pts_rot = [eval_pts_rot evaluation_points(ii)];
-    else
-        eval_pts_exp = [eval_pts_exp evaluation_points(ii)];
+    [waveTime, waveRho] = extractWave(wavePossible, wavePossibleRho, plot_rho_value);
+    waveTime = waveTime(~cellfun(@isempty, waveTime));
+    nWaves = size(waveTime,2);
+
+    % initialize all 1D arrays
+    angVel = 1:nWaves; ang = angVel; waveCurl = angVel; startTime = angVel; endTime = angVel; 
+    duration = angVel; quadrant = angVel; cue = angVel; iFreq = angVel; 
+
+    for jj = 1:nWaves
+        if ~isempty(waveTime{jj})
+            % characterize the rotation of the wave using curl and angular velocity
+            [angVel(jj), ang(jj), waveCurl(jj)] = rotationalCharacteristics(waveTime{jj}, cav, curlz, sourceCurrent(jj,:));
+        end
     end
 
-end 
+    allTimes = cell2mat(cellfun(@(x) x(:)', waveTime(~cellfun(@isempty, waveTime)), 'UniformOutput', false));
+    wavePresent = zeros(1,3001);
+    wavePresent(allTimes) = 1;
 
+    wavesHit(cnt).waveTime = waveTime;
+    wavesHit(cnt).wavePresent = wavePresent;
+    wavesHit(cnt).source =  sourceCurrent;
+    wavesHit(cnt).rho = waveRho;
+    wavesHit(cnt).angVel = angVel;
+    wavesHit(cnt).curl =  waveCurl;
+    wavesHit(cnt).ang = ang;
+    
+    wavesHit(cnt).start = cellfun(@(x) x(1), waveTime(~cellfun(@isempty, waveTime)));
+    wavesHit(cnt).end = cellfun(@(x) x(end), waveTime(~cellfun(@isempty, waveTime)));
+    wavesHit(cnt).duration = wavesHit(cnt).end - wavesHit(cnt).start;
+    
+    wavesHit(cnt).quadrant = ceil((wavesHit(cnt).start / 3001) * 16);
+    wavesHit(cnt).cue = floor(wavesHit(cnt).start / 1500);
+    
+    cnt = cnt + 1;
+    % wavesHit(trial) = trialWaves;
 
-% Initialize video writer object
-% videoFileName = 'rot_waves_80_200.avi'; 
-% v = VideoWriter(videoFileName, 'Motion JPEG AVI'); v.FrameRate = 5;
-% open(v);
+    % disp(wavesHit(cnt).ang(1))
 
-if options.plot == true
-    ctr = 1;
-    for jj = 1:numel(rotWaves)
-        % animate plot
-        tw = rotWaves(jj); time = tw.waveTime;
-        if ~isempty(time) && (max(tw.rho) > .75)
-            st = time(1); sp = time(end);
-            wave_plot = xf(:,:,st:sp);
-            
-            %create plot
-            figure; title( sprintf( 'trial %d, wave example %d, 0 of %d ms', trial, ctr, length(time) ) );
-            color_range = [ min(reshape(wave_plot,[],1)) max(reshape(wave_plot,[],1)) ]; 
-            h = imagesc( wave_plot(:,:,1) ); hold on; axis image; 
-            plot( source(1,jj), source(2,jj), '.', 'markersize', 35, 'color', [.7 .7 .7] );
-            set( gca, 'linewidth', 3, 'xtick', [], 'ytick', [], 'fontname', 'arial', 'fontsize', 16, 'ydir', 'reverse' ); 
-            colormap( M.myMap ); box on; xlabel( 'electrodes' ); ylabel( 'electrodes' ); clim( color_range )
-    
-            % create colorbar
-            cb = colorbar();
-    
-            set( cb, 'location', 'southoutside' )
-            set( cb, 'position', [0.6661    0.1674    0.2429    0.0588] );
-    
-            set( get(cb,'ylabel'), 'string', 'Amplitude (\muV)' ); set( cb, 'linewidth', 2 )
-    
-            % animate plot
-            for kk = 1:size(wave_plot,3)
-                set( h, 'cdata', wave_plot(:,:,kk) ); 
-                set( get(gca,'title'), 'string', ...
-                    sprintf( 'trial %d, wave example %d, %d of %d ms', trial, ctr, kk, size(wave_plot,3) ) )
-                pause(pause_length); 
-                % frame = getframe(gcf);
-                % writeVideo(v,frame)
-            end
-    
-            ctr = ctr + 1;
-            % close(gcf);
-
-        end
+    fprintf('trial: %d, ',trial)
+    if mod(trial,10) == 0
+        fprintf("trial %d done\n",trial)
     end
 end
+end     % end of trial analysis 
 
-% close(v);
+rotWaves.wavesHit = wavesHit;
 
-%end
+% end  
+
+% save('RotWavesHits_40-80.mat',"rotWaves")
+
+% rotWaves = load('RotWavesHits_5-40');
+hitsVel = []; hitsStart = []; hitsQuad = []; wavesPresAll = NaN(3001,143);
+for i = 1:numel(behaviour.cueHitTrace)
+    % wavesPresAll(:,i) = rotWaves.wavesHit(i).wavePresent;
+    hitsVel = [hitsVel rotWaves.wavesHit(i).angVel];
+    hitsStart = [hitsStart rotWaves.wavesHit(i).start];
+    hitsQuad = [hitsQuad rotWaves.wavesHit(i).quadrant];
+end
+
+plotWaveRaster(rotWaves.wavesHit,[],behaviour,[])
+
+
+
+figure;
+
+% First subplot: scatterplot of angular velocity for hit trials
+subplot(2,1,1);  % Create subplot (2 rows, 1 column, 1st plot)
+scatter(hitsStart, abs(hitsVel), 'filled');
+title('Angular Velocity for Hit Trials');
+xlabel('Time (ms)');
+grid on;
+
+% Remove y-axis for the scatter plot
+set(gca, 'ytick', [])
+
+% Add trend line to scatter plot
+p = polyfit(hitsStart, abs(hitsVel), 1);
+yfit = polyval(p, hitsStart);
+hold on;
+plot(hitsStart, yfit, '-b', 'LineWidth', 1.5);
+hold off;
+
+% Add a red vertical line in the center
+xCenter = (max(hitsStart) + min(hitsStart)) / 2;
+line([xCenter xCenter], get(gca, 'ylim'), 'Color', 'r', 'LineWidth', 1.5);
+
+% Distribution of waves in hit trials
+subplot(2, 1, 2);
+histogram(hitsQuad, 'BinLimits', [0 16], 'BinWidth', 1);
+hold on;
+xlim([0 16]);
+
+% Fit a normal distribution to the data
+pd = fitdist(hitsQuad', 'Normal');
+xValues = linspace(0, 16, 100); % X values from 0 to 16
+yValues = pdf(pd, xValues) * numel(hitsQuad) * (xValues(2) - xValues(1)); % Scaled PDF
+
+plot(xValues, yValues, 'r-', 'LineWidth', 1.5); % Plot the trend line within the limited range
+
+line([8 8], ylim, 'Color', 'r', 'LineStyle', '--'); % Red vertical line at x = 8
+
+hold off;
+xlabel('Quadrants');
+ylabel('Frequency');
+title('Distribution of Waves in Hit Trials');
+grid on;
+
+% Adjust layout for better appearance
+sgtitle('Wave Analysis for Hit Trials');  % Overall title for the figure
+
