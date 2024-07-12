@@ -14,6 +14,7 @@ function waves = processWaveTrials(cueTrace, parameters)
     waves = struct();
     
     if nTrials > 1
+        nTrials = 3;
         for trial = 1:nTrials
 %         for trial = 1:3
                            
@@ -29,8 +30,6 @@ function waves = processWaveTrials(cueTrace, parameters)
             % wideband filter
             xf = bandpass_filter( raw, parameters.f(1), parameters.f(2), ...
                 parameters.filter_order, parameters.Fs );
-    
-            disp(xf(4,4,1))
             
             % GP representation
             xgp = generalized_phase( xf, parameters.Fs, parameters.lp );
