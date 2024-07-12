@@ -11,30 +11,34 @@ parameters.evaluation_angle = pi; parameters.tol = 0.2; % evaluation points
 parameters.windowBeforeCue = 1.5; % in seconds 
 parameters.windowAfterCue = 1.5; % in seconds 
 parameters.plot_rho_value = 0.5; plot_time = 20; pause_length = 0.2; % plot settings
-parameters.verbose = true; parameters.traces = {behaviour.cueHitTrace, behaviour.cueMissTrace};
+parameters.verbose = true; parameters.traces = {'hit', 'miss'};
 parameters.extract = true;
 parameters.plot = true;
 
-% datasets = {'Day14_BaselineWaves2.mat'};
-
+behaviours = {behaviour5,behaviour14};
+behaviourNames = {'behaviour5','behaviour14'};
 
 if parameters.extract == true 
     rotWaves = struct();
-%     for ii = 1:numel(datasets)
-%         data = datasets{ii};
-%         load(data,'IntanBehaviourBaseline');
-%         behaviour = IntanBehaviourBaseline;
+    for ii = 1:numel(behaviours)
+        behaviour = behaviours{ii};  
+        fprintf('\nbehaviour: %s\n', behaviourNames{ii})
+
         for jj = 1:numel(parameters.traces)
-            cueTrace = parameters.traces{jj};
-            if jj == 1
+            traceID = parameters.traces{jj};
+            if strcmp(traceID, 'hit')
                 fieldName = 'wavesHit';
-            elseif jj == 2
+                cueTrace = behaviour.cueHitTrace;
+            elseif strcmp(traceID, 'miss')
                 fieldName = 'wavesMiss';
+                cueTrace = behaviour.cueMissTrace;
             end
+            fprintf('trace: %s\nfieldName: %s\n', traceID,fieldName);
             condWaves = processWaveTrials(cueTrace, parameters);
             rotWaves.(fieldName) = condWaves;
+            fprintf('ADDED!\n')
         end
-%     end
+    end
 end
 
 
